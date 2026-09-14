@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Loop — vagas & garagens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ TELA DE LOGIN / CADASTRO ============ -->
+<div id="auth-screen" class="auth-screen">
+  <div class="auth-panel-brand">
+    <div class="hero-stripes" aria-hidden="true"></div>
+    <div class="brand">
+      <div class="brand-mark">L</div>
+      <div class="brand-text">
+        <div class="name">Loop</div>
+        <div class="tag">vagas &amp; garagens</div>
+      </div>
+    </div>
+    <h2>Sua vaga está ali, ociosa. A de outra pessoa também.</h2>
+    <p>Entre para encontrar uma vaga por hora perto de você, ou cadastre a sua garagem e comece a ganhar com o espaço parado.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><strong>180+</strong><span>vagas ativas</span></div>
+      <div class="hero-stat"><strong>34</strong><span>bairros cobertos</span></div>
+      <div class="hero-stat"><strong>4.8</strong><span>avaliação média</span></div>
+    </div>
+  </div>
+
+  <div class="auth-panel-form">
+    <div class="auth-tabs">
+      <button type="button" class="auth-tab is-active" data-tab="entrar">Entrar</button>
+      <button type="button" class="auth-tab" data-tab="cadastro">Criar conta</button>
+    </div>
+
+    <form id="login-form" class="auth-form is-active">
+      <div class="field">
+        <label for="login-email">E-mail</label>
+        <input type="email" id="login-email" placeholder="voce@email.com" required>
+      </div>
+      <div class="field">
+        <label for="login-senha">Senha</label>
+        <input type="password" id="login-senha" placeholder="••••••••" required>
+      </div>
+      <p class="auth-error" id="login-error"></p>
+      <button type="submit" class="btn btn--primary btn--block">Entrar</button>
+
+      <div class="auth-demo">
+        <span>Testar sem cadastro:</span>
+        <div class="auth-demo-actions">
+          <button type="button" class="btn btn--outline btn--sm" data-demo="motorista">Entrar como motorista</button>
+          <button type="button" class="btn btn--outline btn--sm" data-demo="proprietario">Entrar como proprietário</button>
+        </div>
+      </div>
+    </form>
+
+    <form id="signup-form" class="auth-form">
+      <div class="field">
+        <label for="signup-nome">Nome completo</label>
+        <input type="text" id="signup-nome" placeholder="Seu nome" required>
+      </div>
+      <div class="field">
+        <label for="signup-email">E-mail</label>
+        <input type="email" id="signup-email" placeholder="voce@email.com" required>
+      </div>
+      <div class="field">
+        <label for="signup-senha">Senha</label>
+        <input type="password" id="signup-senha" placeholder="Mínimo 4 caracteres" minlength="4" required>
+      </div>
+      <div class="field">
+        <label>Tipo de conta</label>
+        <div class="role-select">
+          <label class="role-card">
+            <input type="radio" name="tipo-conta" value="motorista" checked>
+            <span class="role-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 16l1.2-5.2A2 2 0 0 1 7.14 9.4h9.72a2 2 0 0 1 1.94 1.4L20 16"/><rect x="3" y="16" width="18" height="4" rx="1.2"/><circle cx="7.5" cy="20" r="1.1"/><circle cx="16.5" cy="20" r="1.1"/></svg></span>
+            <span class="role-text"><strong>Motorista</strong><small>Quero encontrar vagas para estacionar</small></span>
+          </label>
+          <label class="role-card">
+            <input type="radio" name="tipo-conta" value="proprietario">
+            <span class="role-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-6 9 6"/><path d="M5 10v9h14v-9"/></svg></span>
+            <span class="role-text"><strong>Proprietário</strong><small>Quero anunciar minha vaga ou garagem</small></span>
+          </label>
+        </div>
+      </div>
+      <p class="auth-error" id="signup-error"></p>
+      <button type="submit" class="btn btn--primary btn--block">Criar conta</button>
+    </form>
+  </div>
+</div>
+
+<div class="app" id="app-shell" style="display:none">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">L</div>
+      <div class="brand-text">
+        <div class="name">Loop</div>
+        <div class="tag">vagas &amp; garagens</div>
+      </div>
+    </div>
+
+    <div class="user-card" id="user-card">
+      <span class="user-avatar" id="user-avatar"></span>
+      <div class="user-info">
+        <div class="user-name" id="user-name"></div>
+        <div class="user-role" id="user-role"></div>
+      </div>
+      <button class="logout-btn" id="logout-btn" title="Sair">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+      </button>
+    </div>
+
+    <nav class="nav-list" aria-label="Navegação principal">
+      <button class="nav-item is-active" data-view="buscar">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.2"/><rect x="14" y="3" width="7" height="7" rx="1.2"/><rect x="3" y="14" width="7" height="7" rx="1.2"/><rect x="14" y="14" width="7" height="7" rx="1.2"/></svg>
+        <span class="label-full">Buscar vagas</span>
+      </button>
+      <button class="nav-item" data-view="resultados">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/></svg>
+        <span class="label-full">Resultados</span>
+      </button>
+      <button class="nav-item" data-view="anunciar">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+        <span class="label-full">Anunciar vaga</span>
+      </button>
+      <button class="nav-item" data-view="minhas-vagas">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 16l1.2-5.2A2 2 0 0 1 7.14 9.4h9.72a2 2 0 0 1 1.94 1.4L20 16"/><rect x="3" y="16" width="18" height="4" rx="1.2"/><circle cx="7.5" cy="20" r="1.1"/><circle cx="16.5" cy="20" r="1.1"/></svg>
+        <span class="label-full">Minhas vagas</span>
+      </button>
+      <button class="nav-item" data-view="minhas-reservas">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M9 11l2 2 4-4"/></svg>
+        <span class="label-full">Minhas reservas</span>
+      </button>
+      <button class="nav-item" data-view="administracao">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6l7-3z"/></svg>
+        <span class="label-full">Administração</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      Protótipo — Desenvolvimento Visual<br>Dados mostrados são fictícios.
+    </div>
+  </aside>
+
+  <!-- ============ CONTEÚDO ============ -->
+  <main class="content">
+
+    <!-- ---------- BUSCAR VAGAS ---------- -->
+    <section id="view-buscar" class="view is-active">
+      <div class="hero-card">
+        <div class="hero-stripes" aria-hidden="true"></div>
+        <div class="hero-copy">
+          <span class="eyebrow-pill">
+            <span class="live-dot" aria-hidden="true"></span>
+            vagas livres perto de você, agora
+          </span>
+          <h2>Sua vaga está ali, ociosa. A de outra pessoa também.</h2>
+          <p>O Loop conecta garagens e vagas particulares disponíveis a quem precisa estacionar por algumas horas — sem mensalidade, sem burocracia.</p>
+          <div class="search-bar">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input type="text" id="home-search-input" placeholder="Para onde você vai? (endereço, bairro, cidade)">
+            <button class="btn btn--primary" id="home-search-btn">Buscar</button>
+          </div>
+        </div>
+        <div class="hero-stats">
+          <div class="hero-stat"><strong>180+</strong><span>vagas ativas</span></div>
+          <div class="hero-stat"><strong>34</strong><span>bairros cobertos</span></div>
+          <div class="hero-stat"><strong>4.8</strong><span>avaliação média</span></div>
+        </div>
+      </div>
+
+      <div class="section-headline">
+        <h3 class="section-title">Vagas em destaque</h3>
+        <p class="section-sub">Disponíveis agora, selecionadas pela proximidade e avaliação.</p>
+      </div>
+      <div class="card-grid" id="destaque-grid"></div>
+    </section>
+
+    <!-- ---------- RESULTADOS ---------- -->
+    <section id="view-resultados" class="view">
+      <div class="view-head">
+        <h1>Resultados</h1>
+        <p>Vagas disponíveis com base na sua busca.</p>
+      </div>
+      <div class="search-bar" style="margin-bottom: 1.5rem; max-width: 560px;">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="results-search-input" placeholder="Filtrar por endereço, bairro ou cidade">
+        <button class="btn btn--primary" id="results-search-btn">Buscar</button>
+      </div>
+      <div class="results-layout">
+        <div>
+          <p class="results-count" id="results-count"></p>
+          <div class="results-list" id="results-list"></div>
+        </div>
+        <div class="map-mock" id="map-mock"></div>
+      </div>
+    </section>
+
+    <!-- ---------- ANUNCIAR VAGA ---------- -->
+    <section id="view-anunciar" class="view">
+      <div class="view-head">
+        <h1>Anunciar vaga</h1>
+        <p>Preencha as informações da sua vaga ou garagem. O anúncio será analisado por um administrador antes de ficar visível na busca.</p>
+      </div>
+      <form class="form-card" id="anunciar-form">
+        <div class="form-grid">
+          <div class="field">
+            <label for="f-titulo">Título *</label>
+            <input type="text" id="f-titulo" placeholder="Ex: Garagem coberta próxima à USP" required>
+          </div>
+          <div class="field">
+            <label for="f-descricao">Descrição</label>
+            <textarea id="f-descricao" placeholder="Detalhes sobre acesso, segurança, dimensões..."></textarea>
+          </div>
+          <div class="field">
+            <label for="f-endereco">Endereço *</label>
+            <input type="text" id="f-endereco" placeholder="Rua, número, bairro, cidade" required>
+            <span class="hint">Usamos o endereço para localizar a vaga no mapa de resultados.</span>
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label for="f-tipo">Tipo</label>
+              <select id="f-tipo">
+                <option value="Vaga">Vaga</option>
+                <option value="Garagem">Garagem</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-preco">Preço por hora (R$) *</label>
+              <input type="number" id="f-preco" min="0" step="0.5" placeholder="0.00" required>
+            </div>
+          </div>
+          <div class="field">
+            <label>Comodidades</label>
+            <div class="checkbox-row">
+              <label class="checkbox-chip"><input type="checkbox" value="coberta" name="amenidade"> Coberta</label>
+              <label class="checkbox-chip"><input type="checkbox" value="cameras" name="amenidade"> Câmeras 24h</label>
+              <label class="checkbox-chip"><input type="checkbox" value="portao" name="amenidade"> Portão eletrônico</label>
+              <label class="checkbox-chip"><input type="checkbox" value="carregador" name="amenidade"> Carregador EV</label>
+            </div>
+          </div>
+          <div class="field">
+            <label for="f-horarios">Horários disponíveis</label>
+            <input type="text" id="f-horarios" placeholder="Ex: Seg-Sex 8h-18h, Sáb 9h-14h">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn--primary">Enviar para análise</button>
+            <span class="form-feedback" id="form-feedback">Vaga enviada para análise.</span>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- ---------- MINHAS VAGAS ---------- -->
+    <section id="view-minhas-vagas" class="view">
+      <div class="view-head">
+        <h1>Minhas vagas</h1>
+        <p>Garagens e vagas que você anunciou na plataforma.</p>
+      </div>
+      <div id="minhas-vagas-list"></div>
+    </section>
+
+    <!-- ---------- MINHAS RESERVAS ---------- -->
+    <section id="view-minhas-reservas" class="view">
+      <div class="view-head">
+        <h1>Minhas reservas</h1>
+        <p>Vagas que você reservou como motorista.</p>
+      </div>
+      <div id="minhas-reservas-list"></div>
+    </section>
+
+    <!-- ---------- ADMINISTRAÇÃO ---------- -->
+    <section id="view-administracao" class="view">
+      <div class="view-head">
+        <h1>Administração</h1>
+        <p>Mediação de cadastros pendentes e disputas entre usuários.</p>
+      </div>
+
+      <div class="admin-block">
+        <h3>Vagas pendentes de aprovação</h3>
+        <div id="admin-pendentes-list"></div>
+      </div>
+
+      <div class="admin-block">
+        <h3>Disputas</h3>
+        <div id="admin-disputas-list"></div>
+      </div>
+    </section>
+
+  </main>
+</div><!-- /app-shell -->
+
+<script src="script.js"></script>
+</body>
+</html>
