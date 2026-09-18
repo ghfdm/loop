@@ -58,7 +58,7 @@
       </div>
     </form>
 
-    <form id="signup-form" class="auth-form">
+    <form id="signup-form" class="auth-form" novalidate>
       <div class="field">
         <label for="signup-nome">Nome completo</label>
         <input type="text" id="signup-nome" placeholder="Seu nome" required>
@@ -66,6 +66,7 @@
       <div class="field">
         <label for="signup-email">E-mail</label>
         <input type="email" id="signup-email" placeholder="voce@email.com" required>
+        <span class="hint">Para testar, use teste@example.com. Não é necessário receber e-mail.</span>
       </div>
       <div class="field">
         <label for="signup-senha">Senha</label>
@@ -87,6 +88,7 @@
         </div>
       </div>
       <p class="auth-error" id="signup-error"></p>
+      <p class="hint" id="signup-hint">Cadastro de demonstração: use dados fictícios. A conta fica disponível nesta aba até encerrá-la.</p>
       <button type="submit" class="btn btn--primary btn--block">Criar conta</button>
     </form>
   </div>

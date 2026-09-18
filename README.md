@@ -4,6 +4,14 @@ O backend usa ASP.NET Core e .NET 10. Nesta etapa, ele transforma um endereço
 em possíveis localizações (latitude e longitude) usando o Nominatim.
 O frontend existente ainda é um protótipo e não chama esta API.
 
+O cadastro do protótipo aceita e-mails fictícios com formato válido, como
+`teste@example.com`, e senha de pelo menos quatro caracteres. Os cadastros ficam
+em `sessionStorage`, sobrevivendo à atualização na mesma aba. Uma nova sessão
+de aba não oferece persistência garantida. Se o navegador bloquear o armazenamento,
+o cadastro funciona apenas em memória. As senhas dos novos cadastros são guardadas
+como resumo SHA-256 para a demonstração; isso não substitui autenticação segura
+no backend. Use apenas dados fictícios.
+
 ## Como executar
 
 Instale o SDK .NET 10. No terminal, dentro da pasta `loop`, execute:

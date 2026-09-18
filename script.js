@@ -139,7 +139,7 @@ function initials(name) {
 }
 
 // ============================================================
-// AUTENTICAÇÃO (em memória — sem back-end real)
+// Acesso de demonstração — sem autenticação no backend.
 // ============================================================
 const roleLabel = { motorista: "Motorista", proprietario: "Proprietário" };
 
@@ -147,6 +147,36 @@ const users = [
   { nome: "Ana Motorista", email: "motorista@loop.com", senha: "123456", tipo: "motorista" },
   { nome: "Marina S.", email: "proprietario@loop.com", senha: "123456", tipo: "proprietario" }
 ];
+
+const cadastroStorageKey = "loop.cadastros-demo.v1";
+try {
+  const cadastros = JSON.parse(sessionStorage.getItem(cadastroStorageKey) || "[]");
+  if (Array.isArray(cadastros)) {
+    users.push(...cadastros.filter(u => u && typeof u.nome === "string" && u.nome.trim()
+      && typeof u.email === "string" && typeof u.senhaHash === "string"
+      && /^[a-f0-9]{64}$/.test(u.senhaHash)
+      && ["motorista", "proprietario"].includes(u.tipo)
+      && !users.some(existente => existente.email.toLowerCase() === u.email.toLowerCase())));
+  }
+} catch {
+  // Se o navegador bloquear o armazenamento, o protótipo ainda funciona em memória.
+}
+
+async function hashSenhaDemo(senha) {
+  const bytes = new TextEncoder().encode(senha);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function salvarCadastrosDemo() {
+  try {
+    // Contas de demonstração já existentes não precisam ser salvas.
+    sessionStorage.setItem(cadastroStorageKey, JSON.stringify(users.filter(u => u.senhaHash)));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 let currentUser = null;
 
@@ -165,13 +195,22 @@ document.querySelectorAll(".auth-tab").forEach(tab => {
 });
 
 // ---------------- login ----------------
-document.getElementById("login-form").addEventListener("submit", (e) => {
+document.getElementById("login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = document.getElementById("login-email").value.trim().toLowerCase();
   const senha = document.getElementById("login-senha").value;
-  const user = users.find(u => u.email.toLowerCase() === email && u.senha === senha);
+  const user = users.find(u => u.email.toLowerCase() === email);
+  let senhaValida = user && user.senha === senha;
+  if (user?.senhaHash) {
+    try {
+      senhaValida = user.senhaHash === await hashSenhaDemo(senha);
+    } catch {
+      document.getElementById("login-error").textContent = "Não foi possível verificar a senha. Abra o site por localhost em um navegador atualizado.";
+      return;
+    }
+  }
 
-  if (!user) {
+  if (!user || !senhaValida) {
     document.getElementById("login-error").textContent = "E-mail ou senha inválidos.";
     return;
   }
@@ -188,22 +227,62 @@ document.querySelectorAll("[data-demo]").forEach(btn => {
 });
 
 // ---------------- cadastro ----------------
-document.getElementById("signup-form").addEventListener("submit", (e) => {
+const signupForm = document.getElementById("signup-form");
+signupForm.addEventListener("invalid", (e) => {
+  // Mostra o primeiro campo inválido, na mesma ordem em que o usuário preenche.
+  if (e.target !== signupForm.querySelector(":invalid")) return;
+  const mensagem = e.target.id === "signup-email"
+    ? (e.target.validity.valueMissing
+      ? "Preencha o e-mail. Para testar, use teste@example.com."
+      : "Informe um e-mail no formato teste@example.com. Ele pode ser fictício.")
+    : e.target.id === "signup-senha"
+      ? "A senha precisa ter pelo menos 4 caracteres."
+      : "Preencha seu nome para criar a conta.";
+  document.getElementById("signup-error").textContent = mensagem;
+}, true);
+
+signupForm.addEventListener("input", () => {
+  document.getElementById("signup-error").textContent = "";
+});
+
+signupForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const nome = document.getElementById("signup-nome").value.trim();
   const email = document.getElementById("signup-email").value.trim().toLowerCase();
   const senha = document.getElementById("signup-senha").value;
   const tipo = document.querySelector("input[name='tipo-conta']:checked").value;
 
-  if (!nome || !email || senha.length < 4) return;
+  document.getElementById("signup-nome").value = nome;
+  document.getElementById("signup-email").value = email;
+  if (!signupForm.checkValidity()) {
+    signupForm.querySelector(":invalid").focus();
+    return;
+  }
+
+  if (!nome || !email || senha.length < 4) {
+    document.getElementById("signup-error").textContent = "Preencha nome, e-mail e uma senha com pelo menos 4 caracteres.";
+    return;
+  }
+
+  let senhaHash;
+  try {
+    senhaHash = await hashSenhaDemo(senha);
+  } catch {
+    document.getElementById("signup-error").textContent = "Não foi possível criar a conta. Abra o site por localhost em um navegador atualizado.";
+    return;
+  }
 
   if (users.some(u => u.email.toLowerCase() === email)) {
     document.getElementById("signup-error").textContent = "Já existe uma conta com esse e-mail.";
     return;
   }
 
-  const novoUsuario = { nome, email, senha, tipo };
+  const novoUsuario = { nome, email, senhaHash, tipo };
   users.push(novoUsuario);
+  const salvo = salvarCadastrosDemo();
+  document.getElementById("signup-hint").textContent = salvo
+    ? "Cadastro de teste disponível nesta aba, inclusive após atualizar a página."
+    : "O navegador bloqueou o armazenamento. Esta conta será perdida ao atualizar a página.";
   document.getElementById("signup-error").textContent = "";
   e.target.reset();
   enterApp(novoUsuario);
