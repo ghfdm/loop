@@ -21,6 +21,10 @@ public class ReservasController(ReservasService reservasService) : ControllerBas
                 mensagem = "O início deve estar no futuro e o fim deve ser posterior ao início."
             }),
             FalhaReserva.VagaInexistente => NotFound(new { mensagem = "Vaga não encontrada." }),
+            FalhaReserva.ForaDoHorario => Conflict(new
+            {
+                mensagem = "O período solicitado está fora do horário de funcionamento da vaga (UTC-03:00)."
+            }),
             FalhaReserva.Conflito => Conflict(new
             {
                 mensagem = "A vaga já está reservada em parte ou em todo esse período."
@@ -44,6 +48,9 @@ public class ReservasController(ReservasService reservasService) : ControllerBas
     [HttpPost("{id:guid}/concluir")]
     public IActionResult Concluir(Guid id) => ResponderTransicao(reservasService.Concluir(id));
 
+    [HttpPost("{id:guid}/cancelar")]
+    public IActionResult Cancelar(Guid id) => ResponderTransicao(reservasService.Cancelar(id));
+
     private IActionResult ResponderTransicao(ResultadoTransicao resultado)
     {
         return resultado.Falha switch
@@ -55,7 +62,7 @@ public class ReservasController(ReservasService reservasService) : ControllerBas
             }),
             FalhaTransicao.HorarioInvalido => Conflict(new
             {
-                mensagem = "Para iniciar, aguarde o início e faça o pedido antes do fim. Para concluir, aguarde o fim do período reservado."
+                mensagem = "Para iniciar, aguarde o início e faça o pedido antes do fim. Para concluir, aguarde o fim do período reservado. Para cancelar, faça o pedido antes do início."
             }),
             _ => Ok(resultado.Reserva)
         };

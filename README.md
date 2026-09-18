@@ -111,8 +111,8 @@ Ela representa distância em linha reta sobre essa superfície, e não trajeto
 pelas ruas, tempo de viagem ou distância percorrida a pé.
 
 As vagas e suas coordenadas são fictícias e independentes dos anúncios do
-JavaScript. Ainda não há banco de dados, cadastro de vagas na API, integração
-com a interface ou filtro por disponibilidade de horário. Não é feita uma nova
+JavaScript. Ainda não há banco de dados, cadastro de vagas na API ou integração
+com a interface. O filtro por disponibilidade é explicado na etapa 5. Não é feita uma nova
 consulta ao Nominatim para calcular distâncias.
 
 Teste de validação: omita `latitude` ou envie `latitude=100`. Deve retornar HTTP 400.
@@ -131,7 +131,8 @@ testar a criação apenas colando uma URL na barra do navegador.
 Com o servidor rodando em um terminal, abra outro terminal PowerShell e execute:
 
 ```powershell
-$inicio = [DateTimeOffset]::Now.AddDays(1)
+$amanha = [DateTimeOffset]::Now.ToOffset([TimeSpan]::FromHours(-3)).Date.AddDays(1)
+$inicio = [DateTimeOffset]::new($amanha.AddHours(10), [TimeSpan]::FromHours(-3))
 $fim = $inicio.AddHours(2)
 $corpo = @{
     vagaId = 1
@@ -189,9 +190,8 @@ estratégia de concorrência própria, especialmente com múltiplas instâncias.
 As reservas desaparecem ao reiniciar. `motoristaId` é apenas uma identificação
 de demonstração: não há autenticação nem validação de usuário cadastrado. A consulta
 por ID também não verifica o dono. O frontend ainda não utiliza esses endpoints.
-Não há horários de funcionamento das vagas nem filtro por horário na busca de
-proximidade. A máquina de estados é explicada na etapa 4 abaixo; o cancelamento
-ainda será implementado.
+Os horários de funcionamento e o filtro por período são explicados na etapa 5.
+A máquina de estados é explicada na etapa 4 abaixo; o cancelamento, na etapa 6.
 
 Para apresentar: “O cliente envia a vaga e o período. A API valida as datas,
 verifica se a vaga existe e se está livre naquele intervalo. Se estiver livre,
@@ -207,8 +207,9 @@ texto livre. O JSON continua enviando os nomes como texto, como `Confirmada`.
 | Confirmada | iniciar | EmAndamento | No início ou depois dele, antes do fim |
 | EmAndamento | concluir | Concluida | No fim ou depois dele |
 | Confirmada | concluir | Concluida | No fim ou depois dele, mesmo sem início registrado |
+| Confirmada | cancelar | Cancelada | Antes do início |
 
-Outras transições são rejeitadas. `Concluida` é final: não permite iniciar ou concluir
+Outras transições são rejeitadas. `Concluida` e `Cancelada` são finais: não permitem iniciar ou concluir
 novamente. A conclusão direta de uma confirmada evita que uma reserva sem registro
 de início fique impossível de encerrar. Isso não comprova que o motorista usou a vaga.
 
@@ -235,7 +236,7 @@ curtos para não precisar esperar horas. Execute o bloco inteiro de uma vez:
 ```powershell
 $inicio = [DateTimeOffset]::Now.AddSeconds(5)
 $corpo = @{
-    vagaId = 1
+    vagaId = 3
     motoristaId = 'motorista-estados-demo'
     inicio = $inicio.ToString('o')
     fim = $inicio.AddSeconds(10).ToString('o')
@@ -256,7 +257,8 @@ deve retornar 409. Uma reserva criada para amanhã também rejeita início e con
 hoje. Como a memória é compartilhada, conflitos de horário continuam valendo para
 novos testes; reiniciar o servidor limpa os dados de demonstração.
 
-Não há autenticação, cancelamento ou mudança automática por tarefa agendada.
+Não há autenticação nem mudança automática por tarefa agendada. O cancelamento
+é explicado na etapa 6.
 Esses endpoints demonstram as regras; a identidade e a autorização do motorista
 ainda precisarão ser verificadas antes de disponibilizar o sistema a usuários reais.
 
@@ -264,6 +266,122 @@ Para apresentar: “A máquina de estados define as mudanças permitidas no cicl
 reserva. A API verifica o estado atual e o horário antes de aceitar a operação,
 impedindo, por exemplo, iniciar uma reserva já concluída.”
 
-## Próxima etapa
+## Etapa 5: conflitos e disponibilidade
 
-Ampliar as regras de disponibilidade e depois implementar o cancelamento.
+As vagas agora têm `horaAbertura` e `horaFechamento` em horas inteiras:
+vaga 1, 8h–22h; vaga 2, 8h–18h; vaga 3, 0h–24h. Funcionam todos os dias.
+O fuso fixo da demonstração é UTC-03:00, independente do fuso da máquina ou do pedido.
+Não há feriados, horários por dia da semana ou janelas noturnas nesta versão.
+
+O período inteiro deve caber no funcionamento. É permitido começar na abertura e
+terminar no fechamento. Nas vagas com fechamento diário, uma reserva não pode
+atravessar a noite; a vaga 24 horas aceita períodos que atravessam dias.
+Datas invertidas ou no passado retornam 400; fora do funcionamento retorna 409.
+
+`VagasService.EstaNoHorarioDeFuncionamento` verifica o funcionamento.
+`ReservasService.TemConflito` verifica sobreposição com reservas `Confirmada` ou
+`EmAndamento`. `FiltrarDisponiveis` aplica essas regras à lista da busca, sob `lock`.
+A criação também verifica tudo sob o mesmo bloqueio: uma busca não garante a vaga
+até que a reserva seja criada. Reservas concluídas não bloqueiam horários.
+
+### Testar a busca com datas
+
+Com o servidor rodando e memória limpa, execute em outro terminal PowerShell:
+
+```powershell
+$amanha = [DateTimeOffset]::Now.ToOffset([TimeSpan]::FromHours(-3)).Date.AddDays(1)
+$inicio = [DateTimeOffset]::new($amanha.AddHours(10), [TimeSpan]::FromHours(-3))
+$fim = $inicio.AddHours(2)
+$consulta = 'http://localhost:5080/api/vagas/proximas?latitude=-23.5568602&longitude=-46.6614121&raioKm=2'
+$consulta += '&inicio=' + [Uri]::EscapeDataString($inicio.ToString('o'))
+$consulta += '&fim=' + [Uri]::EscapeDataString($fim.ToString('o'))
+
+# Antes da reserva: deve retornar vagas 1 e 2.
+Invoke-RestMethod $consulta | ConvertTo-Json -Depth 5
+
+$corpo = @{
+    vagaId = 1
+    motoristaId = 'motorista-disponibilidade-demo'
+    inicio = $inicio.ToString('o')
+    fim = $fim.ToString('o')
+} | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri 'http://localhost:5080/api/reservas' -ContentType 'application/json' -Body $corpo
+
+# Depois da reserva: deve retornar somente vaga 2 para esse período.
+Invoke-RestMethod $consulta | ConvertTo-Json -Depth 5
+```
+
+Repita o POST para ver conflito (409). Para testar funcionamento, crie uma reserva
+da vaga 1 das 7h às 9h ou das 21h às 23h: ambas devem retornar 409.
+Das 12h às 14h é permitido após uma reserva das 10h às 12h.
+
+`inicio` e `fim` são opcionais na busca, mas devem ser enviados juntos. Informar
+apenas um retorna 400. Sem ambos, a busca continua geográfica e envia
+`disponibilidadeVerificada: false`; com ambos, envia `true` e o período consultado.
+URL usa datas ISO 8601; `EscapeDataString` protege caracteres como `+` do fuso.
+
+Para apresentar: “Uma vaga próxima só aparece na busca por período se funcionar
+durante todo o intervalo e não houver reserva ativa sobreposta. Na criação,
+repetimos as verificações para evitar conflitos entre pedidos concorrentes.”
+
+## Etapa 6: cancelamento de reserva
+
+`POST /api/reservas/{id}/cancelar` cancela uma reserva sem corpo JSON.
+Regra adotada nesta versão: somente reservas `Confirmada` podem ser canceladas,
+e apenas antes do instante de início. `EmAndamento`, `Concluida` e `Cancelada`
+rejeitam cancelamento. Uma confirmada cujo início já passou também rejeita.
+
+Sucesso retorna HTTP 200 e o registro com `estado: "Cancelada"` e `canceladaEm`
+em UTC. Reserva inexistente retorna 404; estado ou horário incompatível retorna
+409. Repetir o cancelamento retorna 409, como nas demais operações de transição.
+
+Não apagamos a reserva: o ID continua consultável via GET. O estado cancelado é
+final e não pode voltar a confirmada. Para reservar novamente, cria-se outra
+reserva, com um novo ID. Não há pagamento, estorno ou multa.
+
+`EstadoReserva` ganhou `Cancelada`; `Reserva` ganhou `CanceladaEm` (nulo antes
+do cancelamento). `ReservasService.Cancelar` usa a mesma máquina de estados,
+incluindo o bloqueio compartilhado com criação e consulta de disponibilidade.
+O controller ganhou a rota de cancelamento. `TemConflito` já considera apenas
+reservas confirmadas e em andamento: por isso o cancelamento libera o período
+automaticamente, sem precisar remover o registro.
+
+### Teste completo no PowerShell
+
+Inicie o servidor e use outro terminal. Com a memória limpa:
+
+```powershell
+$amanha = [DateTimeOffset]::Now.ToOffset([TimeSpan]::FromHours(-3)).Date.AddDays(1)
+$inicio = [DateTimeOffset]::new($amanha.AddHours(10), [TimeSpan]::FromHours(-3))
+$fim = $inicio.AddHours(2)
+$corpo = @{
+    vagaId = 1
+    motoristaId = 'motorista-cancelamento-demo'
+    inicio = $inicio.ToString('o')
+    fim = $fim.ToString('o')
+} | ConvertTo-Json
+
+$reserva = Invoke-RestMethod -Method Post -Uri 'http://localhost:5080/api/reservas' -ContentType 'application/json' -Body $corpo
+$url = "http://localhost:5080/api/reservas/$($reserva.id)"
+
+# Cancela e consulta o registro preservado.
+Invoke-RestMethod -Method Post -Uri "$url/cancelar"
+Invoke-RestMethod -Uri $url
+
+# O mesmo período está livre: cria outra reserva com novo ID.
+Invoke-RestMethod -Method Post -Uri 'http://localhost:5080/api/reservas' -ContentType 'application/json' -Body $corpo
+```
+
+O cancelamento também faz a vaga voltar à busca por disponibilidade para aquele
+período. Se criar outra reserva logo depois, ela volta a ocupar o intervalo.
+
+Para apresentar: “Cancelar é uma mudança de estado, não uma exclusão. Preservamos
+o registro e o momento do cancelamento, e o período deixa de bloquear a agenda.
+A regra permite cancelamento de reserva confirmada somente antes do início.”
+
+## Escopo atual
+
+As seis etapas do backend foram implementadas com dados de demonstração em
+memória. Ainda não há banco de dados, autenticação, autorização por motorista,
+cadastro de vagas na API ou integração com a interface. As operações de reserva
+continuam sem verificar a identidade de quem chama os endpoints.

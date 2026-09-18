@@ -8,14 +8,32 @@ public sealed class VagasService
     private readonly Vaga[] _vagas =
     [
         new(1, "Vaga demonstrativa Paulista", "Região da Avenida Paulista, São Paulo",
-            -23.5568602, -46.6614121, 12m),
+            -23.5568602, -46.6614121, 12m, 8, 22),
         new(2, "Garagem demonstrativa Bela Vista", "Região da Bela Vista, São Paulo",
-            -23.5618602, -46.6614121, 10m),
+            -23.5618602, -46.6614121, 10m, 8, 18),
         new(3, "Vaga demonstrativa Santana", "Região de Santana, São Paulo",
-            -23.5000, -46.6250, 8m)
+            -23.5000, -46.6250, 8m, 0, 24)
     ];
 
     public Vaga? BuscarPorId(int id) => _vagas.FirstOrDefault(vaga => vaga.Id == id);
+
+    public bool EstaNoHorarioDeFuncionamento(Vaga vaga, DateTimeOffset inicio, DateTimeOffset fim)
+    {
+        if (fim <= inicio)
+            return false;
+
+        // Convenção da demonstração: todos os horários das vagas usam UTC-03:00.
+        // Não usamos o fuso do computador nem o fuso enviado pelo cliente.
+        var inicioLocal = inicio.ToOffset(TimeSpan.FromHours(-3));
+        var fimLocal = fim.ToOffset(TimeSpan.FromHours(-3));
+
+        if (vaga.HoraAbertura == 0 && vaga.HoraFechamento == 24)
+            return true;
+
+        var abertura = inicioLocal.Date.AddHours(vaga.HoraAbertura);
+        var fechamento = inicioLocal.Date.AddHours(vaga.HoraFechamento);
+        return inicioLocal.DateTime >= abertura && fimLocal.DateTime <= fechamento;
+    }
 
     public VagaProxima[] BuscarProximas(double latitude, double longitude, double raioKm)
     {

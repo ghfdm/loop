@@ -2,7 +2,7 @@ using Loop.Models;
 
 namespace Loop.Services;
 
-public enum FalhaReserva { Nenhuma, PeriodoInvalido, VagaInexistente, Conflito }
+public enum FalhaReserva { Nenhuma, PeriodoInvalido, VagaInexistente, ForaDoHorario, Conflito }
 public record ResultadoCriacaoReserva(Reserva? Reserva, FalhaReserva Falha);
 public enum FalhaTransicao { Nenhuma, ReservaInexistente, EstadoInvalido, HorarioInvalido }
 public record ResultadoTransicao(Reserva? Reserva, FalhaTransicao Falha);
@@ -20,15 +20,18 @@ public sealed class ReservasService(VagasService vagasService)
         lock (_controle)
         {
             var agora = DateTimeOffset.UtcNow;
-            if (inicio <= agora || fim <= inicio)
+            if (!PeriodoValido(inicio, fim, agora))
                 return new(null, FalhaReserva.PeriodoInvalido);
 
-            if (vagasService.BuscarPorId(vagaId) is null)
+            var vaga = vagasService.BuscarPorId(vagaId);
+            if (vaga is null)
                 return new(null, FalhaReserva.VagaInexistente);
 
+            if (!vagasService.EstaNoHorarioDeFuncionamento(vaga, inicio, fim))
+                return new(null, FalhaReserva.ForaDoHorario);
+
             // Intervalo [início, fim): permite uma reserva começar quando outra termina.
-            var conflito = _reservas.Values.Any(reserva => reserva.VagaId == vagaId
-                && inicio < reserva.Fim && fim > reserva.Inicio);
+            var conflito = TemConflito(vagaId, inicio, fim);
             if (conflito)
                 return new(null, FalhaReserva.Conflito);
 
@@ -45,9 +48,30 @@ public sealed class ReservasService(VagasService vagasService)
             return _reservas.GetValueOrDefault(id);
     }
 
+    public static bool PeriodoValido(DateTimeOffset inicio, DateTimeOffset fim, DateTimeOffset agora)
+        => inicio > agora && fim > inicio;
+
+    public VagaProxima[] FiltrarDisponiveis(VagaProxima[] vagas,
+        DateTimeOffset inicio, DateTimeOffset fim)
+    {
+        // Uma única leitura protegida oferece resultados consistentes nesta consulta.
+        lock (_controle)
+            return vagas.Where(resultado =>
+                vagasService.EstaNoHorarioDeFuncionamento(resultado.Vaga, inicio, fim)
+                && !TemConflito(resultado.Vaga.Id, inicio, fim)).ToArray();
+    }
+
+    // Chamado somente dentro do lock. Concluídas e canceladas não bloqueiam a agenda.
+    private bool TemConflito(int vagaId, DateTimeOffset inicio, DateTimeOffset fim)
+        => _reservas.Values.Any(reserva => reserva.VagaId == vagaId
+            && (reserva.Estado is EstadoReserva.Confirmada or EstadoReserva.EmAndamento)
+            && inicio < reserva.Fim && fim > reserva.Inicio);
+
     public ResultadoTransicao Iniciar(Guid id) => AlterarEstado(id, EstadoReserva.EmAndamento);
 
     public ResultadoTransicao Concluir(Guid id) => AlterarEstado(id, EstadoReserva.Concluida);
+
+    public ResultadoTransicao Cancelar(Guid id) => AlterarEstado(id, EstadoReserva.Cancelada);
 
     private ResultadoTransicao AlterarEstado(Guid id, EstadoReserva destino)
     {
@@ -63,6 +87,7 @@ public sealed class ReservasService(VagasService vagasService)
                 (EstadoReserva.EmAndamento, EstadoReserva.Concluida) => true,
                 // Permite encerrar uma reserva vencida mesmo sem registro de início.
                 (EstadoReserva.Confirmada, EstadoReserva.Concluida) => true,
+                (EstadoReserva.Confirmada, EstadoReserva.Cancelada) => true,
                 _ => false
             };
             if (!transicaoPermitida)
@@ -73,13 +98,18 @@ public sealed class ReservasService(VagasService vagasService)
             {
                 EstadoReserva.EmAndamento => agora >= reserva.Inicio && agora < reserva.Fim,
                 EstadoReserva.Concluida => agora >= reserva.Fim,
+                EstadoReserva.Cancelada => agora < reserva.Inicio,
                 _ => false
             };
             if (!horarioPermitido)
                 return new(null, FalhaTransicao.HorarioInvalido);
 
             // record + with cria uma cópia; substituímos o registro dentro do bloqueio.
-            var atualizada = reserva with { Estado = destino };
+            var atualizada = reserva with
+            {
+                Estado = destino,
+                CanceladaEm = destino == EstadoReserva.Cancelada ? agora : reserva.CanceladaEm
+            };
             _reservas[id] = atualizada;
             return new(atualizada, FalhaTransicao.Nenhuma);
         }
