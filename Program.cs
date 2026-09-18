@@ -13,6 +13,7 @@ builder.Services.AddHttpClient("Nominatim", client =>
 // Uma única instância compartilha o controle de consultas entre todos os usuários.
 builder.Services.AddSingleton<NominatimService>();
 builder.Services.AddSingleton<VagasService>();
+builder.Services.AddSingleton<ReservasService>();
 
 var app = builder.Build();
 app.MapControllers();

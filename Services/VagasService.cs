@@ -15,6 +15,8 @@ public sealed class VagasService
             -23.5000, -46.6250, 8m)
     ];
 
+    public Vaga? BuscarPorId(int id) => _vagas.FirstOrDefault(vaga => vaga.Id == id);
+
     public VagaProxima[] BuscarProximas(double latitude, double longitude, double raioKm)
     {
         return _vagas

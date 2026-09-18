@@ -122,7 +122,81 @@ Para apresentar: “Após escolher as coordenadas do destino, a API calcula a di
 até cada vaga cadastrada, seleciona as que estão dentro do raio e ordena da mais
 próxima à mais distante. Nesta versão usamos dados de demonstração em memória.”
 
+## Etapa 3: criar reserva sem pagamento
+
+`POST /api/reservas` cria uma reserva e `GET /api/reservas/{id}` consulta uma
+reserva existente. POST envia dados no corpo da requisição, em JSON; não é possível
+testar a criação apenas colando uma URL na barra do navegador.
+
+Com o servidor rodando em um terminal, abra outro terminal PowerShell e execute:
+
+```powershell
+$inicio = [DateTimeOffset]::Now.AddDays(1)
+$fim = $inicio.AddHours(2)
+$corpo = @{
+    vagaId = 1
+    motoristaId = 'motorista-demo'
+    inicio = $inicio.ToString('o')
+    fim = $fim.ToString('o')
+} | ConvertTo-Json
+
+$reserva = Invoke-RestMethod -Method Post -Uri 'http://localhost:5080/api/reservas' -ContentType 'application/json' -Body $corpo
+$reserva | ConvertTo-Json
+```
+
+O script escolhe um início para amanhã e um fim duas horas depois. `ToString('o')`
+formata a data com o fuso horário. Use datas ISO 8601 com fuso explícito nas chamadas,
+por exemplo `2026-10-20T10:00:00-03:00`. O backend usa `DateTimeOffset` para comparar
+instantes e armazena as datas em UTC, indicado por `+00:00` na resposta.
+
+Ao criar, a API retorna HTTP 201, a reserva e um cabeçalho `Location` com o endereço
+para consultá-la. A resposta contém `id`, `vagaId`, `motoristaId`, `inicio`, `fim`,
+`criadaEm` e `estado` (inicialmente `Confirmada`). Não há cobrança nesta etapa.
+
+Para consultar a reserva criada:
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:5080/api/reservas/$($reserva.id)"
+```
+
+Para testar um conflito, repita a chamada POST usando o mesmo `$corpo`. Ela deve
+retornar HTTP 409. O PowerShell mostrará um erro porque recebeu esse código HTTP.
+
+### Arquivos e regras
+
+- `Models/Reserva.cs`: define a reserva e os campos do pedido de criação.
+- `Services/ReservasService.cs`: valida o período, verifica a vaga e os conflitos,
+  cria um identificador `Guid` e guarda a reserva em um dicionário em memória.
+- `Controllers/ReservasController.cs`: recebe JSON e traduz os resultados do serviço
+  em respostas HTTP. O ASP.NET valida os campos obrigatórios antes de executar a ação.
+- `Services/VagasService.cs`: ganhou uma consulta por ID para verificar se a vaga existe.
+- `Program.cs`: registra uma instância compartilhada do serviço de reservas.
+
+O início deve estar no futuro e o fim deve ser posterior ao início. Erros de campos
+ou de período retornam HTTP 400. Vaga inexistente retorna 404. Conflito retorna 409.
+Consultar um ID de reserva inexistente também retorna 404.
+
+Dois períodos conflitam quando `novoInicio < fimExistente` e
+`novoFim > inicioExistente`. Isso detecta sobreposição parcial, total e períodos
+iguais. Uma reserva das 10h às 12h permite outra das 12h às 14h na mesma vaga.
+Reservas de vagas diferentes não conflitam entre si.
+
+`lock` protege o trecho que verifica e grava: sem ele, duas chamadas simultâneas
+poderiam verificar a disponibilidade antes de qualquer uma gravar e ambas seriam
+aceitas. O bloqueio funciona nesta única instância; um banco de dados exigirá uma
+estratégia de concorrência própria, especialmente com múltiplas instâncias.
+
+As reservas desaparecem ao reiniciar. `motoristaId` é apenas uma identificação
+de demonstração: não há autenticação nem validação de usuário cadastrado. A consulta
+por ID também não verifica o dono. O frontend ainda não utiliza esses endpoints.
+Não há horários de funcionamento das vagas nem filtro por horário na busca de
+proximidade. A máquina de estados e o cancelamento serão implementados depois.
+
+Para apresentar: “O cliente envia a vaga e o período. A API valida as datas,
+verifica se a vaga existe e se está livre naquele intervalo. Se estiver livre,
+cria uma reserva confirmada sem pagamento e devolve seu identificador.”
+
 ## Próxima etapa
 
-Reserva sem pagamento. Depois virão estados da reserva, conflitos de horário e
-cancelamento, em etapas separadas.
+Máquina de estados da reserva. Depois serão ampliadas as regras de disponibilidade
+e implementado o cancelamento, em etapas separadas.
