@@ -37,4 +37,27 @@ public class ReservasController(ReservasService reservasService) : ControllerBas
             ? NotFound(new { mensagem = "Reserva não encontrada." })
             : Ok(reserva);
     }
+
+    [HttpPost("{id:guid}/iniciar")]
+    public IActionResult Iniciar(Guid id) => ResponderTransicao(reservasService.Iniciar(id));
+
+    [HttpPost("{id:guid}/concluir")]
+    public IActionResult Concluir(Guid id) => ResponderTransicao(reservasService.Concluir(id));
+
+    private IActionResult ResponderTransicao(ResultadoTransicao resultado)
+    {
+        return resultado.Falha switch
+        {
+            FalhaTransicao.ReservaInexistente => NotFound(new { mensagem = "Reserva não encontrada." }),
+            FalhaTransicao.EstadoInvalido => Conflict(new
+            {
+                mensagem = "O estado atual da reserva não permite essa operação."
+            }),
+            FalhaTransicao.HorarioInvalido => Conflict(new
+            {
+                mensagem = "Para iniciar, aguarde o início e faça o pedido antes do fim. Para concluir, aguarde o fim do período reservado."
+            }),
+            _ => Ok(resultado.Reserva)
+        };
+    }
 }

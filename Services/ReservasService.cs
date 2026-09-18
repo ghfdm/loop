@@ -4,6 +4,8 @@ namespace Loop.Services;
 
 public enum FalhaReserva { Nenhuma, PeriodoInvalido, VagaInexistente, Conflito }
 public record ResultadoCriacaoReserva(Reserva? Reserva, FalhaReserva Falha);
+public enum FalhaTransicao { Nenhuma, ReservaInexistente, EstadoInvalido, HorarioInvalido }
+public record ResultadoTransicao(Reserva? Reserva, FalhaTransicao Falha);
 
 public sealed class ReservasService(VagasService vagasService)
 {
@@ -31,7 +33,7 @@ public sealed class ReservasService(VagasService vagasService)
                 return new(null, FalhaReserva.Conflito);
 
             var reserva = new Reserva(Guid.NewGuid(), vagaId, motoristaId.Trim(),
-                inicio.ToUniversalTime(), fim.ToUniversalTime(), agora, "Confirmada");
+                inicio.ToUniversalTime(), fim.ToUniversalTime(), agora, EstadoReserva.Confirmada);
             _reservas.Add(reserva.Id, reserva);
             return new(reserva, FalhaReserva.Nenhuma);
         }
@@ -41,5 +43,45 @@ public sealed class ReservasService(VagasService vagasService)
     {
         lock (_controle)
             return _reservas.GetValueOrDefault(id);
+    }
+
+    public ResultadoTransicao Iniciar(Guid id) => AlterarEstado(id, EstadoReserva.EmAndamento);
+
+    public ResultadoTransicao Concluir(Guid id) => AlterarEstado(id, EstadoReserva.Concluida);
+
+    private ResultadoTransicao AlterarEstado(Guid id, EstadoReserva destino)
+    {
+        lock (_controle)
+        {
+            if (!_reservas.TryGetValue(id, out var reserva))
+                return new(null, FalhaTransicao.ReservaInexistente);
+
+            // Só existem os caminhos definidos aqui. Não aceitamos estado arbitrário do cliente.
+            var transicaoPermitida = (reserva.Estado, destino) switch
+            {
+                (EstadoReserva.Confirmada, EstadoReserva.EmAndamento) => true,
+                (EstadoReserva.EmAndamento, EstadoReserva.Concluida) => true,
+                // Permite encerrar uma reserva vencida mesmo sem registro de início.
+                (EstadoReserva.Confirmada, EstadoReserva.Concluida) => true,
+                _ => false
+            };
+            if (!transicaoPermitida)
+                return new(null, FalhaTransicao.EstadoInvalido);
+
+            var agora = DateTimeOffset.UtcNow;
+            var horarioPermitido = destino switch
+            {
+                EstadoReserva.EmAndamento => agora >= reserva.Inicio && agora < reserva.Fim,
+                EstadoReserva.Concluida => agora >= reserva.Fim,
+                _ => false
+            };
+            if (!horarioPermitido)
+                return new(null, FalhaTransicao.HorarioInvalido);
+
+            // record + with cria uma cópia; substituímos o registro dentro do bloqueio.
+            var atualizada = reserva with { Estado = destino };
+            _reservas[id] = atualizada;
+            return new(atualizada, FalhaTransicao.Nenhuma);
+        }
     }
 }

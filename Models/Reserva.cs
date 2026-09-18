@@ -1,10 +1,14 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace Loop.Models;
 
+[JsonConverter(typeof(JsonStringEnumConverter<EstadoReserva>))]
+public enum EstadoReserva { Confirmada, EmAndamento, Concluida }
+
 public record Reserva(Guid Id, int VagaId, string MotoristaId,
     DateTimeOffset Inicio, DateTimeOffset Fim, DateTimeOffset CriadaEm,
-    string Estado);
+    EstadoReserva Estado);
 
 // Dados enviados no corpo JSON da requisição de criação.
 public sealed class CriarReservaRequest

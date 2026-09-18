@@ -190,13 +190,80 @@ As reservas desaparecem ao reiniciar. `motoristaId` é apenas uma identificaçã
 de demonstração: não há autenticação nem validação de usuário cadastrado. A consulta
 por ID também não verifica o dono. O frontend ainda não utiliza esses endpoints.
 Não há horários de funcionamento das vagas nem filtro por horário na busca de
-proximidade. A máquina de estados e o cancelamento serão implementados depois.
+proximidade. A máquina de estados é explicada na etapa 4 abaixo; o cancelamento
+ainda será implementado.
 
 Para apresentar: “O cliente envia a vaga e o período. A API valida as datas,
 verifica se a vaga existe e se está livre naquele intervalo. Se estiver livre,
 cria uma reserva confirmada sem pagamento e devolve seu identificador.”
 
+## Etapa 4: máquina de estados
+
+O estado agora usa `enum EstadoReserva`, com valores definidos em C#, em vez de
+texto livre. O JSON continua enviando os nomes como texto, como `Confirmada`.
+
+| Estado atual | Operação | Próximo estado | Regra de horário |
+| --- | --- | --- | --- |
+| Confirmada | iniciar | EmAndamento | No início ou depois dele, antes do fim |
+| EmAndamento | concluir | Concluida | No fim ou depois dele |
+| Confirmada | concluir | Concluida | No fim ou depois dele, mesmo sem início registrado |
+
+Outras transições são rejeitadas. `Concluida` é final: não permite iniciar ou concluir
+novamente. A conclusão direta de uma confirmada evita que uma reserva sem registro
+de início fique impossível de encerrar. Isso não comprova que o motorista usou a vaga.
+
+Endpoints (sem corpo JSON):
+
+- `POST /api/reservas/{id}/iniciar`
+- `POST /api/reservas/{id}/concluir`
+
+Sucesso retorna HTTP 200 e a reserva atualizada. Reserva inexistente retorna 404;
+estado ou horário incompatível retorna 409. Pedidos repetidos são rejeitados com
+409. As mudanças são explícitas: o relógio não altera o estado automaticamente.
+Depois de uma alteração, GET retorna o novo estado.
+
+`ReservasService.AlterarEstado` concentra a máquina de estados: primeiro encontra
+a reserva, depois verifica a transição, valida o horário e substitui o registro.
+Tudo ocorre dentro do mesmo `lock` usado na criação. `with` cria uma cópia do
+registro com o novo estado. O controller apenas transforma o resultado em HTTP.
+
+### Teste rápido no PowerShell
+
+Inicie o servidor em um terminal e execute este script em outro. Ele usa períodos
+curtos para não precisar esperar horas. Execute o bloco inteiro de uma vez:
+
+```powershell
+$inicio = [DateTimeOffset]::Now.AddSeconds(5)
+$corpo = @{
+    vagaId = 1
+    motoristaId = 'motorista-estados-demo'
+    inicio = $inicio.ToString('o')
+    fim = $inicio.AddSeconds(10).ToString('o')
+} | ConvertTo-Json
+$reserva = Invoke-RestMethod -Method Post -Uri 'http://localhost:5080/api/reservas' -ContentType 'application/json' -Body $corpo
+$url = "http://localhost:5080/api/reservas/$($reserva.id)"
+
+Start-Sleep -Seconds 6
+Invoke-RestMethod -Method Post -Uri "$url/iniciar"
+
+Start-Sleep -Seconds 10
+Invoke-RestMethod -Method Post -Uri "$url/concluir"
+Invoke-RestMethod -Uri $url
+```
+
+Você verá `EmAndamento` e depois `Concluida`. Tentar iniciar a reserva concluída
+deve retornar 409. Uma reserva criada para amanhã também rejeita início e conclusão
+hoje. Como a memória é compartilhada, conflitos de horário continuam valendo para
+novos testes; reiniciar o servidor limpa os dados de demonstração.
+
+Não há autenticação, cancelamento ou mudança automática por tarefa agendada.
+Esses endpoints demonstram as regras; a identidade e a autorização do motorista
+ainda precisarão ser verificadas antes de disponibilizar o sistema a usuários reais.
+
+Para apresentar: “A máquina de estados define as mudanças permitidas no ciclo da
+reserva. A API verifica o estado atual e o horário antes de aceitar a operação,
+impedindo, por exemplo, iniciar uma reserva já concluída.”
+
 ## Próxima etapa
 
-Máquina de estados da reserva. Depois serão ampliadas as regras de disponibilidade
-e implementado o cancelamento, em etapas separadas.
+Ampliar as regras de disponibilidade e depois implementar o cancelamento.
