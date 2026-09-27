@@ -18,6 +18,23 @@ public class UsuariosController(UsuariosService usuariosService) : ControllerBas
         return Ok(resposta);
     }
 
+    [HttpPut("perfil")]
+    public ActionResult<UsuarioResposta> AtualizarPerfil(AtualizarPerfil pedido)
+    {
+        var cabecalho = Request.Headers.Authorization.ToString();
+        if (!cabecalho.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return Unauthorized(new { mensagem = "Informe um token Bearer válido." });
+
+        var token = cabecalho[7..].Trim();
+        var (usuario, tokenInvalido, emailEmUso) = usuariosService.AtualizarPerfil(token, pedido);
+        if (tokenInvalido)
+            return Unauthorized(new { mensagem = "Token inválido ou expirado. Faça login novamente." });
+        if (emailEmUso)
+            return Conflict(new { mensagem = "Este e-mail já está cadastrado." });
+
+        return Ok(UsuarioResposta.De(usuario!));
+    }
+
     [HttpPost("motoristas")]
     public ActionResult<UsuarioResposta> CadastrarMotorista(CadastroMotorista pedido)
     {

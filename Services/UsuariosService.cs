@@ -64,4 +64,38 @@ public sealed class UsuariosService
             return new LoginResposta(token, "Bearer", expiraEm, UsuarioResposta.De(usuario));
         }
     }
+
+    public (Usuario? Usuario, bool TokenInvalido, bool EmailEmUso) AtualizarPerfil(
+        string token, AtualizarPerfil pedido)
+    {
+        lock (_lock)
+        {
+            if (!_sessoes.TryGetValue(token, out var sessao))
+                return (null, true, false);
+
+            if (sessao.ExpiraEm <= DateTimeOffset.UtcNow)
+            {
+                _sessoes.Remove(token);
+                return (null, true, false);
+            }
+
+            var atual = _porEmail.Values.FirstOrDefault(u => u.Id == sessao.UsuarioId);
+            if (atual is null)
+                return (null, true, false);
+
+            var novoEmail = pedido.Email.Trim();
+            if (_porEmail.TryGetValue(novoEmail, out var donoEmail) && donoEmail.Id != atual.Id)
+                return (null, false, true);
+
+            var atualizado = atual with
+            {
+                Nome = pedido.Nome.Trim(),
+                Email = novoEmail,
+                Telefone = pedido.Telefone.Trim()
+            };
+            _porEmail.Remove(atual.Email);
+            _porEmail[novoEmail] = atualizado;
+            return (atualizado, false, false);
+        }
+    }
 }
