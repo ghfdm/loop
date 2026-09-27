@@ -393,3 +393,33 @@ As seis etapas do backend foram implementadas com dados de demonstração em
 memória. Ainda não há banco de dados, autenticação, autorização por motorista,
 cadastro de vagas na API ou integração com a interface. As operações de reserva
 continuam sem verificar a identidade de quem chama os endpoints.
+
+## Etapa 7: cadastro de motorista
+
+`POST /api/usuarios/motoristas` cadastra um motorista. Envie JSON no corpo:
+
+```json
+{
+  "nome": "Ana Silva",
+  "email": "ana@example.com",
+  "telefone": "+5511999999999",
+  "senha": "senha-segura"
+}
+```
+
+O sucesso retorna HTTP 201 e os dados públicos do usuário (sem senha). Nome deve
+ter de 2 a 100 caracteres; email deve ter formato válido e até 254 caracteres;
+telefone deve ser válido e ter de 8 a 20 caracteres; senha deve ter de 8 a 128
+caracteres. Campos inválidos retornam HTTP 400; email já cadastrado retorna 409.
+
+`CadastroMotoristaRequest` define e valida os campos de entrada. `Usuario`
+representa a conta e a resposta pública. `UsuariosService` impede email duplicado
+sem diferenciar maiúsculas, gera salt aleatório e deriva o hash com PBKDF2/SHA-256.
+O `lock` protege a verificação e gravação nesta instância. O controller expõe a
+rota, e `Program.cs` registra o serviço compartilhado.
+
+Os cadastros ficam apenas na memória e são perdidos ao reiniciar o servidor.
+Este passo ainda não habilita login nem autenticação. Para apresentar: “O
+controller recebe os dados, o ASP.NET valida o formato, e o serviço verifica se
+o email já existe. A senha nunca é salva em texto: o sistema guarda um hash
+derivado com salt aleatório.”

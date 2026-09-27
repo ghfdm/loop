@@ -14,6 +14,7 @@ builder.Services.AddHttpClient("Nominatim", client =>
 builder.Services.AddSingleton<NominatimService>();
 builder.Services.AddSingleton<VagasService>();
 builder.Services.AddSingleton<ReservasService>();
+builder.Services.AddSingleton<UsuariosService>();
 
 var app = builder.Build();
 app.MapControllers();
