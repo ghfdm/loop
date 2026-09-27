@@ -7,6 +7,9 @@ public sealed class UsuariosService
 {
     private readonly object _lock = new();
     private readonly Dictionary<string, Usuario> _porEmail = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (Guid UsuarioId, DateTimeOffset ExpiraEm)> _sessoes = new();
+
+    private static readonly TimeSpan DuracaoSessao = TimeSpan.FromHours(8);
 
     public (Usuario? Usuario, bool EmailEmUso) CadastrarMotorista(CadastroMotorista pedido)
         => Cadastrar(pedido.Nome, pedido.Email, pedido.Telefone, pedido.Senha, TipoUsuario.Motorista);
@@ -32,6 +35,33 @@ public sealed class UsuariosService
                 Convert.ToBase64String(salt), DateTimeOffset.UtcNow);
             _porEmail.Add(email, usuario);
             return (usuario, false);
+        }
+    }
+
+    public LoginResposta? Entrar(Login pedido)
+    {
+        lock (_lock)
+        {
+            foreach (var tokenExpirado in _sessoes
+                .Where(s => s.Value.ExpiraEm <= DateTimeOffset.UtcNow)
+                .Select(s => s.Key).ToArray())
+                _sessoes.Remove(tokenExpirado);
+
+            if (!_porEmail.TryGetValue(pedido.Email.Trim(), out var usuario))
+                return null;
+
+            var hashEsperado = Convert.FromBase64String(usuario.HashSenha);
+            var salt = Convert.FromBase64String(usuario.SaltSenha);
+            var hashRecebido = Rfc2898DeriveBytes.Pbkdf2(
+                pedido.Senha, salt, 600_000, HashAlgorithmName.SHA256, hashEsperado.Length);
+            if (!CryptographicOperations.FixedTimeEquals(hashEsperado, hashRecebido))
+                return null;
+
+            var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+                .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            var expiraEm = DateTimeOffset.UtcNow.Add(DuracaoSessao);
+            _sessoes[token] = (usuario.Id, expiraEm);
+            return new LoginResposta(token, "Bearer", expiraEm, UsuarioResposta.De(usuario));
         }
     }
 }

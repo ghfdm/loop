@@ -8,6 +8,16 @@ namespace Loop.Controllers;
 [Route("api/usuarios")]
 public class UsuariosController(UsuariosService usuariosService) : ControllerBase
 {
+    [HttpPost("login")]
+    public ActionResult<LoginResposta> Login(Login pedido)
+    {
+        var resposta = usuariosService.Entrar(pedido);
+        if (resposta is null)
+            return Unauthorized(new { mensagem = "Email ou senha inválidos." });
+
+        return Ok(resposta);
+    }
+
     [HttpPost("motoristas")]
     public ActionResult<UsuarioResposta> CadastrarMotorista(CadastroMotorista pedido)
     {
